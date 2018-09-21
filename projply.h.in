@@ -1,0 +1,6 @@
+#define projply_VERSION_MAJOR @projply_VERSION_MAJOR@
+#define projply_VERSION_MINOR @projply_VERSION_MINOR@
+#define projply_VERSION_PATCH @projply_VERSION_PATCH@
+#define projply_GIT_BRANCH @projply_GIT_BRANCH@
+#define projply_GIT_COMMIT @projply_GIT_COMMIT@
+
