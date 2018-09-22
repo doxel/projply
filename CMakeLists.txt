@@ -19,7 +19,7 @@ execute_process(
 
 set (projply_VERSION_MAJOR 1)
 set (projply_VERSION_MINOR 0)
-set (projply_VERSION_PATCH 0)
+set (projply_VERSION_PATCH 2)
 set (projply_GIT_BRANCH "\"${GIT_BRANCH}\"")
 set (projply_GIT_COMMIT "\"${GIT_COMMIT}\"")
 
@@ -45,6 +45,6 @@ link_directories({${PCL_DEFINITIONS})
 add_executable(projply projply.cpp)
 
 # ${PCL_COMMON_LIBRARIES} ${PCL_IO_LIBRARIES} adds too much unused symbols
-target_link_libraries(projply pcl_common pcl_io boost_system proj)
+target_link_libraries(projply pcl_common pcl_io boost_system boost_filesystem proj)
 
 install(TARGETS projply DESTINATION /usr/bin)

@@ -20,7 +20,7 @@
  *
  */
 
-#include <pcl/io/ply_io.h>
+#include <pcl/io/auto_io.h>
 #include <pcl/point_types.h>
 #include <iostream>
 #include <proj_api.h>
@@ -43,8 +43,8 @@ int convert();
 
 void version() {
   std::cerr << appName << " " \
-    << " Version " << projply_VERSION_MAJOR << "." << projply_VERSION_MINOR << "." << projply_VERSION_PATCH << std::endl \
-    << " Branch " << projply_GIT_BRANCH << ", commit " << projply_GIT_COMMIT << std::endl;
+    << " Version " << projply_VERSION_MAJOR << "." << projply_VERSION_MINOR << "." << projply_VERSION_PATCH \
+    << ", branch " << projply_GIT_BRANCH << ", commit " << projply_GIT_COMMIT << std::endl;
 }
 
 void usage() {
@@ -149,7 +149,6 @@ int main(int argc, char **argv) {
       std::cerr << " " << argv[optind++];
     }
     std::cerr << std::endl;
-    std::cerr << std::endl;
     usage();
   }
 
@@ -157,7 +156,7 @@ int main(int argc, char **argv) {
     usage();
   }
 
-  return convert();
+  return !convert();
 }
 
 
@@ -165,7 +164,11 @@ int convert() {
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
   pcl::PLYReader Reader;
 
-  Reader.read(input, *cloud);
+  int err=pcl::io::load(input, *cloud);
+  if (err) {
+    exit(1);
+  }
+ 
   size_t pointCount = cloud->points.size();
 
   double minx=std::numeric_limits<double>::max();
@@ -222,11 +225,9 @@ int convert() {
     }
   }
 
-  //  pcl::PLYWriter Writer;
-  pcl::io::savePLYFile(output, *cloud, false);
+  pcl::io::save(output, *cloud);
 
-  std::setprecision(std::numeric_limits<double>::digits10 + 1);
-  std::cout << "offset " << ox << " " << oy << " " << oz << std::endl;
+  std::cout << std::setprecision(std::numeric_limits<double>::digits10 + 1) << "origin " << ox << " " << oy << " " << oz << std::endl;
 
   return true;
 
