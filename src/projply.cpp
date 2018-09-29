@@ -20,13 +20,14 @@
  *
  */
 
-#include <pcl/io/auto_io.h>
-#include <pcl/point_types.h>
+#include "tinyply.h"
 #include <iostream>
+#include <iomanip>
 #include <proj_api.h>
 #include <algorithm>
 #include <math.h>
 #include <sstream>
+#include <fstream>
 #include <limits>
 #include <getopt.h>
 #include "projply.h"
@@ -38,6 +39,10 @@ char *input;
 char *output;
 projPJ sourceProj;
 projPJ targetProj;
+
+struct float3 { float x, y, z; };
+struct double3 { double x, y, z; };
+
 
 int convert();
 
@@ -152,7 +157,7 @@ int main(int argc, char **argv) {
     usage();
   }
 
-  if (!input || !output || !from || !to) {
+  if (!input || !from || !to) {
     usage();
   }
 
@@ -160,74 +165,127 @@ int main(int argc, char **argv) {
 }
 
 
-int convert() {
-  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
-  pcl::PLYReader Reader;
-
-  int err=pcl::io::load(input, *cloud);
-  if (err) {
-    exit(1);
-  }
- 
-  size_t pointCount = cloud->points.size();
+template <class T>
+double3 *reproj(T points, size_t point_size, size_t pointCount) {
 
   double minx=std::numeric_limits<double>::max();
   double miny=std::numeric_limits<double>::max();
   double minz=std::numeric_limits<double>::max();
 
+  double3 *result;
+  if (point_size==sizeof(double3)) {
+    result=(double3*)points;
+  } else {
+    result=(double3*)malloc(pointCount*sizeof(double3));
+  }
+
   if (shift_output) {
-    double *dx=(double*)malloc(pointCount*sizeof(double));
-    double *dy=(double*)malloc(pointCount*sizeof(double));
-    double *dz=(double*)malloc(pointCount*sizeof(double));
 
     for (size_t i = 0; i < pointCount; ++i) {
-      double x,y,z;
-      x=cloud->points[i].x+ox;
-      y=cloud->points[i].y+oy;
-      z=cloud->points[i].z+oz;
-      int p = pj_transform(sourceProj, targetProj, 1, 1, &x, &y, &z );
+      double *x=&result[i].x;
+      double *y=&result[i].y;
+      double *z=&result[i].z;
+      *x=((double)points[i].x)+ox;
+      *y=((double)points[i].y)+oy;
+      *z=((double)points[i].z)+oz;
+      int p = pj_transform(sourceProj, targetProj, 1, 1, x, y, z );
       if (p) {
-        std::cerr << "error: pj_transform returned error code " << p << std::endl;
-        return false;
+        throw std::runtime_error(std::string("error: pj_transform returned error code ")+std::to_string(p));
       }
-      minx=std::min(minx,x);
-      miny=std::min(miny,y);
-      minz=std::min(minz,z);
-      dx[i]=x;
-      dy[i]=y;
-      dz[i]=z;
+      minx=std::min(minx,*x);
+      miny=std::min(miny,*y);
+      minz=std::min(minz,*z);
     }
 
-    ox=static_cast<int>(minx/100)*100.0;
-    oy=static_cast<int>(miny/100)*100.0;
-    oz=static_cast<int>(minz/100)*100.0;
+    ox=static_cast<long int>(minx/100)*100.0;
+    oy=static_cast<long int>(miny/100)*100.0;
+    oz=static_cast<long int>(minz/100)*100.0;
 
     for (size_t i = 0; i < pointCount; ++i) {
-      cloud->points[i].x=dx[i]-ox;
-      cloud->points[i].y=dy[i]-oy;
-      cloud->points[i].z=dz[i]-oz;
+      result[i].x-=ox;
+      result[i].y-=oy;
+      result[i].z-=oz;
     }
 
   } else {
     for (size_t i = 0; i < pointCount; ++i) {
-      double x,y,z;
-      x=cloud->points[i].x+ox;
-      y=cloud->points[i].y+oy;
-      z=cloud->points[i].z+oz;
-      int p = pj_transform(sourceProj, targetProj, 1, 1, &x, &y, &z );
+      double *x=&result[i].x;
+      double *y=&result[i].y;
+      double *z=&result[i].z;
+      *x=((double)points[i].x)+ox;
+      *y=((double)points[i].y)+oy;
+      *z=((double)points[i].z)+oz;
+      int p = pj_transform(sourceProj, targetProj, 1, 1, x, y, z );
       if (p) {
-        std::cerr << "error: pj_transform returned error code " << p << std::endl;
-        return false;
+        throw std::runtime_error(std::string("error: pj_transform returned error code ")+std::to_string(p));
       }
-      cloud->points[i].x=x;
-      cloud->points[i].y=y;
-      cloud->points[i].z=z;
     }
   }
 
-  pcl::io::save(output, *cloud);
+  if (point_size==sizeof(float3)) {
+    for (size_t i = 0; i < pointCount; ++i) {
+      points[i].x=result[i].x;
+      points[i].y=result[i].y;
+      points[i].z=result[i].z;
+    }
+  }
 
-  std::cout << std::setprecision(std::numeric_limits<double>::digits10 + 1) << "origin " << ox << " " << oy << " " << oz << std::endl;
+  std::cout << std::fixed << "origin " << ox << " " << oy << " " << oz << std::endl;
+  return result;
+}
+
+int convert() {
+  std::ifstream ss(input, std::ios::binary);
+  if (ss.fail()) throw std::runtime_error(std::string("failed to open ") + input);
+
+  tinyply::PlyFile file;
+  file.parse_header(ss);
+
+  for (auto e : file.get_elements()) {
+    std::cout << "element - " << e.name << " (" << e.size << ")" << std::endl;
+    for (auto p : e.properties) std::cout << "\tproperty - " << p.name << " (" << tinyply::PropertyTable[p.propertyType].str << ")" << std::endl;
+  }
+
+  std::shared_ptr<tinyply::PlyData> vertices, color;
+
+  try { vertices = file.request_properties_from_element("vertex", { "x", "y", "z" }); }
+  catch (const std::exception & e) { std::cerr << "error: " << input << ": " << e.what() << std::endl; return false; }
+  try { color = file.request_properties_from_element("vertex", { "diffuse_red", "diffuse_green", "diffuse_blue" }); }
+  catch (const std::exception & e) { color=NULL; }
+
+  std::cerr << "Reading " << input << " ..." << std::endl;
+  file.read(ss);
+  std::cerr << "Read " << vertices->count << " vertices" << std::endl;
+
+
+  double3 *result;
+
+  switch(vertices->t) {
+    case tinyply::Type::FLOAT32:
+      result=reproj((float3*)vertices->buffer.get(),sizeof(float3),vertices->count);
+      break;
+    case tinyply::Type::FLOAT64:
+      result=reproj((double3*)vertices->buffer.get(),sizeof(double3),vertices->count);
+      break;
+    default:
+      throw std::runtime_error("unhandled vertices numeric type");
+      break;
+  }
+
+  /* TODO: use result to convert point type to double in ouput ply when input ply contains floats */
+
+  if (output) {
+    std::filebuf fb_ascii;
+    fb_ascii.open(output, std::ios::out);
+    std::ostream outstream_ascii(&fb_ascii);
+    if (outstream_ascii.fail()) throw std::runtime_error(std::string("failed to open ") + output + " for writing");
+    outstream_ascii << std::fixed;
+    file.write(outstream_ascii,false);
+  } else {
+
+    file.write(std::cout,false);
+  }
+
 
   return true;
 

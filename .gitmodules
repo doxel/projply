@@ -1,0 +1,3 @@
+[submodule "src/tinyply"]
+	path = src/tinyply
+	url = https://github.com/ddiakopoulos/tinyply

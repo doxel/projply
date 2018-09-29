@@ -1,6 +1,8 @@
 cmake_minimum_required (VERSION 2.6)
 project (projply)
 
+add_subdirectory(tinyply)
+
 # Get the current working branch
 execute_process(
   COMMAND git rev-parse --abbrev-ref HEAD
@@ -29,6 +31,7 @@ configure_file (
   )
 
 include_directories("${PROJECT_BINARY_DIR}")
+include_directories("${PROJECT_SOURCE_DIR}/tinyply/source")
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
@@ -38,13 +41,14 @@ set(CMAKE_CXX_FLAGS "-Wall -Wextra")
 set(CMAKE_CXX_FLAGS_DEBUG "-g")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
-find_package(PCL 1.8 REQUIRED COMPONENTS common io)
-include_directories(${PCL_INCLUDE_DIRS})
-link_directories({${PCL_DEFINITIONS})
+#find_package(PCL 1.8 REQUIRED COMPONENTS common io)
+#include_directories(${PCL_INCLUDE_DIRS})
+#link_directories({${PCL_DEFINITIONS})
 
 add_executable(projply projply.cpp)
 
 # ${PCL_COMMON_LIBRARIES} ${PCL_IO_LIBRARIES} adds too much unused symbols
-target_link_libraries(projply pcl_common pcl_io boost_system boost_filesystem proj)
+#target_link_libraries(projply pcl_common pcl_io boost_system boost_filesystem proj)
+target_link_libraries(projply tinyply proj)
 
 install(TARGETS projply DESTINATION /usr/bin)
