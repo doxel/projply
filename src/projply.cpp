@@ -290,6 +290,7 @@ int convert() {
     file.write(outstream_ascii,false);
   } else {
 
+    std::cout << std::fixed;
     file.write(std::cout,false);
   }
   std::cerr << "Done !" << std::endl;
