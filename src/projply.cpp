@@ -115,7 +115,7 @@ int main(int argc, char **argv) {
         to=optarg;
         targetProj = pj_init_plus(to);
         if (targetProj==NULL) {
-          std::cerr << "invalid parameter: " << from << std::endl;
+          std::cerr << "invalid parameter: " << to << std::endl;
           return false;
         }
         break;
@@ -230,7 +230,7 @@ double3 *reproj(T points, size_t point_size, size_t pointCount) {
     }
   }
 
-  std::cout << std::fixed << "origin " << ox << " " << oy << " " << oz << std::endl;
+  std::cerr << std::setprecision(10) << std::noshowpoint << "origin " << ox << " " << oy << " " << oz << std::endl;
   return result;
 }
 
@@ -238,26 +238,32 @@ int convert() {
   std::ifstream ss(input, std::ios::binary);
   if (ss.fail()) throw std::runtime_error(std::string("failed to open ") + input);
 
+  std::cerr << "Opening " << input << " ..." << std::endl;
   tinyply::PlyFile file;
   file.parse_header(ss);
 
   for (auto e : file.get_elements()) {
-    std::cout << "element - " << e.name << " (" << e.size << ")" << std::endl;
-    for (auto p : e.properties) std::cout << "\tproperty - " << p.name << " (" << tinyply::PropertyTable[p.propertyType].str << ")" << std::endl;
+    std::cerr << "element - " << e.name << " (" << e.size << ")" << std::endl;
+    for (auto p : e.properties) {
+      std::cerr << "\tproperty - " << p.name << " (" << tinyply::PropertyTable[p.propertyType].str << ")" << std::endl;
+      if (p.name==std::string("x") || p.name==std::string("y") || p.name==std::string("z")) {
+        if (e.name==std::string("vertex")) continue;
+      }
+      (void)file.request_properties_from_element(e.name.c_str(), { p.name.c_str() }); 
+    }
+
   }
 
-  std::shared_ptr<tinyply::PlyData> vertices, color;
+  std::shared_ptr<tinyply::PlyData> vertices;
 
   try { vertices = file.request_properties_from_element("vertex", { "x", "y", "z" }); }
   catch (const std::exception & e) { std::cerr << "error: " << input << ": " << e.what() << std::endl; return false; }
-  try { color = file.request_properties_from_element("vertex", { "diffuse_red", "diffuse_green", "diffuse_blue" }); }
-  catch (const std::exception & e) { color=NULL; }
 
-  std::cerr << "Reading " << input << " ..." << std::endl;
+  std::cerr << "Reading ..." << std::endl;
   file.read(ss);
-  std::cerr << "Read " << vertices->count << " vertices" << std::endl;
 
 
+  std::cerr << "Reprojecting ..." << std::endl;
   double3 *result;
 
   switch(vertices->t) {
@@ -274,6 +280,7 @@ int convert() {
 
   /* TODO: use result to convert point type to double in ouput ply when input ply contains floats */
 
+  std::cerr << "Saving " << output << std::endl;
   if (output) {
     std::filebuf fb_ascii;
     fb_ascii.open(output, std::ios::out);
@@ -285,6 +292,8 @@ int convert() {
 
     file.write(std::cout,false);
   }
+  std::cerr << "Done !" << std::endl;
+
 
 
   return true;
