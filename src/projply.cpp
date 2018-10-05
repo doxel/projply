@@ -1,4 +1,29 @@
 /*
+* Copyright (c) 2018 ALSENET SA
+*
+* Author(s):
+*
+*      Luc Deschenaux <luc.deschenaux@freesurf.ch>
+*
+* This program is free software: you can redistribute it and/or modify
+* it under the terms of the GNU Affero General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU Affero General Public License for more details.
+*
+* You should have received a copy of the GNU Affero General Public License
+* along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*
+*/
+
+
+
+
+/*
  * Copyright (c) 2018 ALSENET SA
  *
  * Author(s):
@@ -20,7 +45,6 @@
  *
  */
 
-#include "tinyply.h"
 #include <iostream>
 #include <iomanip>
 #include <proj_api.h>
@@ -30,6 +54,8 @@
 #include <fstream>
 #include <limits>
 #include <getopt.h>
+#include <cstring>
+#include "tinyply.h"
 #include "projply.h"
 
 double ox,oy,oz;
@@ -39,6 +65,9 @@ char *input;
 char *output;
 projPJ sourceProj;
 projPJ targetProj;
+
+char *fromProj;
+char *toProj;
 
 struct float3 { float x, y, z; };
 struct double3 { double x, y, z; };
@@ -69,8 +98,6 @@ void usage() {
 
 int main(int argc, char **argv) {
   int c;
-  char *from=0;
-  char *to=0;
 
   appName=argv[0];
 
@@ -103,19 +130,19 @@ int main(int argc, char **argv) {
         break;
 
       case 'f':
-        from=optarg;
-        sourceProj = pj_init_plus(from);
+        fromProj=optarg;
+        sourceProj = pj_init_plus(fromProj);
         if (sourceProj==NULL) {
-          std::cerr << "invalid parameter: " << from << std::endl;
+          std::cerr << "invalid parameter: " << fromProj << std::endl;
           return false;
         }
         break;
 
       case 't':
-        to=optarg;
-        targetProj = pj_init_plus(to);
+        toProj=optarg;
+        targetProj = pj_init_plus(toProj);
         if (targetProj==NULL) {
-          std::cerr << "invalid parameter: " << to << std::endl;
+          std::cerr << "invalid parameter: " << toProj << std::endl;
           return false;
         }
         break;
@@ -157,7 +184,7 @@ int main(int argc, char **argv) {
     usage();
   }
 
-  if (!input || !from || !to) {
+  if (!input || !fromProj || !toProj) {
     usage();
   }
 
@@ -185,9 +212,9 @@ double3 *reproj(T points, size_t point_size, size_t pointCount) {
       double *x=&result[i].x;
       double *y=&result[i].y;
       double *z=&result[i].z;
-      *x=((double)points[i].x)+ox;
-      *y=((double)points[i].y)+oy;
-      *z=((double)points[i].z)+oz;
+      *x=static_cast<double>(points[i].x)+ox;
+      *y=static_cast<double>(points[i].y)+oy;
+      *z=static_cast<double>(points[i].z)+oz;
       int p = pj_transform(sourceProj, targetProj, 1, 1, x, y, z );
       if (p) {
         throw std::runtime_error(std::string("error: pj_transform returned error code ")+std::to_string(p));
@@ -212,9 +239,9 @@ double3 *reproj(T points, size_t point_size, size_t pointCount) {
       double *x=&result[i].x;
       double *y=&result[i].y;
       double *z=&result[i].z;
-      *x=((double)points[i].x)+ox;
-      *y=((double)points[i].y)+oy;
-      *z=((double)points[i].z)+oz;
+      *x=static_cast<double>(points[i].x)+ox;
+      *y=static_cast<double>(points[i].y)+oy;
+      *z=static_cast<double>(points[i].z)+oz;
       int p = pj_transform(sourceProj, targetProj, 1, 1, x, y, z );
       if (p) {
         throw std::runtime_error(std::string("error: pj_transform returned error code ")+std::to_string(p));
@@ -249,7 +276,7 @@ int convert() {
       if (p.name==std::string("x") || p.name==std::string("y") || p.name==std::string("z")) {
         if (e.name==std::string("vertex")) continue;
       }
-      (void)file.request_properties_from_element(e.name.c_str(), { p.name.c_str() }); 
+      (void)file.request_properties_from_element(e.name.c_str(), { p.name.c_str() });
     }
 
   }
@@ -279,6 +306,16 @@ int convert() {
   }
 
   /* TODO: use result to convert point type to double in ouput ply when input ply contains floats */
+
+  std::vector<std::string> &comments=file.get_comments();
+  size_t i=comments.size();
+  while (i) {
+    --i;
+    if (strstr(comments.at(i).c_str(),"proj4")==0) {
+      comments.erase(comments.begin()+i);
+    }
+  }
+  comments.push_back(std::string("proj4: ")+fromProj+" +to "+toProj);
 
   std::cerr << "Saving " << output << std::endl;
   if (output) {
