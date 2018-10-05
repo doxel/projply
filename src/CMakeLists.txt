@@ -20,8 +20,8 @@ execute_process(
   )
 
 set (projply_VERSION_MAJOR 1)
-set (projply_VERSION_MINOR 1)
-set (projply_VERSION_PATCH 2)
+set (projply_VERSION_MINOR 2)
+set (projply_VERSION_PATCH 0)
 set (projply_GIT_BRANCH "\"${GIT_BRANCH}\"")
 set (projply_GIT_COMMIT "\"${GIT_COMMIT}\"")
 

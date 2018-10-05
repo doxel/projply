@@ -295,6 +295,7 @@ int convert() {
 
   switch(vertices->t) {
     case tinyply::Type::FLOAT32:
+     std::cerr << "WARNING: you should set the input coordinates property type to \"double\"" << std::endl;
       result=reproj((float3*)vertices->buffer.get(),sizeof(float3),vertices->count);
       break;
     case tinyply::Type::FLOAT64:
@@ -308,14 +309,7 @@ int convert() {
   /* TODO: use result to convert point type to double in ouput ply when input ply contains floats */
 
   std::vector<std::string> &comments=file.get_comments();
-  size_t i=comments.size();
-  while (i) {
-    --i;
-    if (strstr(comments.at(i).c_str(),"proj4")==0) {
-      comments.erase(comments.begin()+i);
-    }
-  }
-  comments.push_back(std::string("proj4: ")+fromProj+" +to "+toProj);
+  comments.push_back(std::string("projply: ")+fromProj+" +to "+toProj);
 
   std::cerr << "Saving " << output << std::endl;
   if (output) {
@@ -331,8 +325,6 @@ int convert() {
     file.write(std::cout,false);
   }
   std::cerr << "Done !" << std::endl;
-
-
 
   return true;
 
