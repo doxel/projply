@@ -57,157 +57,110 @@
 #include <cstring>
 #include "tinyply.h"
 #include "projply.h"
-
-double ox,oy,oz;
-char *appName;
-int shift_output;
-char *input;
-char *output;
-projPJ sourceProj;
-projPJ targetProj;
-
-char *fromProj;
-char *toProj;
-
-struct float3 { float x, y, z; };
-struct double3 { double x, y, z; };
+#include "ply_io.h"
 
 
-int convert();
+ProjPly::ProjPly(
+  const char *input,
+  const char *fromProj,
+  const char *toProj,
+  const double3 &offset,
+  const int shift_output,
+  const char *output,
+  const int verbose
+){
+  this->input=(char*)input;
+  this->fromProj=(char*)fromProj;
+  this->toProj=(char*)toProj;
+  this->offset=offset;
+  this->shift_output=shift_output;
+  this->output=(char*)output;
+  this->verbose=verbose;
 
-void version() {
-  std::cerr << appName << " " \
-    << " Version " << projply_VERSION_MAJOR << "." << projply_VERSION_MINOR << "." << projply_VERSION_PATCH \
-    << ", branch " << projply_GIT_BRANCH << ", commit " << projply_GIT_COMMIT << std::endl;
+  readFile();
+  initProj();
+  proj();
+  updateComments();
+  save();
+};
+
+void ProjPly::readFile(){
+  std::vector<RequestedProperties> requestList;
+  requestList.push_back(RequestedProperties(&vertices,"vertex",{"x","y","z"}));
+  ply_read(input, file, requestList, otherProperties, verbose);
+  if (!vertices) throw std::runtime_error(std::string("failed to extract vertice properties from ") + input);
 }
 
-void usage() {
-  version();
-  std::cerr << "Usage: " << appName << " <options>" << std::endl;
-  std::cerr << "Options:" << std::endl;
-  std::cerr << "  -i|--input <ply_filename>     input file" << std::endl;
-  std::cerr << "  -o|--output <ply_filename>    output file" << std::endl;
-  std::cerr << "  -f|--from \"+opt[=arg] ...\"    from cartographic parameters" << std::endl;
-  std::cerr << "  -t|--to \"+opt[=arg] ...\"      to cartographic parameters" << std::endl;
-  std::cerr << "  -x <offset>                   optional: shift input coordinates" << std::endl;
-  std::cerr << "  -y <offset>                   optional: shift input coordinates" << std::endl;
-  std::cerr << "  -z <offset>                   optional: shift input coordinates" << std::endl;
-  std::cerr << "  -s|--shift                    optional: auto-shift output coordinates" << std::endl;
-  exit(1);
+void ProjPly::initProj(){
+  sourceProj=pj_init_plus(fromProj);
+  if (sourceProj==NULL) throw std::runtime_error(std::string("Invalid projection: ")+fromProj);
+
+  targetProj=pj_init_plus(toProj);
+  if (sourceProj==NULL) throw std::runtime_error(std::string("Invalid projection: ")+toProj);
 }
 
-int main(int argc, char **argv) {
-  int c;
+double3 *ProjPly::proj() {
+  if (verbose) std::cerr << "Reprojecting ..." << std::endl;
 
-  appName=argv[0];
-
-  while(1) {
-    static struct option long_options[] = {
-      {"shift", no_argument, &shift_output, 1},
-      {"input", required_argument, 0, 'i'},
-      {"output", required_argument, 0, 'o'},
-      {"from", required_argument, 0, 'f'},
-      {"to", required_argument, 0, 't'},
-      {"help", required_argument, 0, 'h'},
-      {"version", no_argument, 0, 'v'},
-      {0, 0, 0, 0}
-    };
-
-    int option_index = 0;
-
-    c = getopt_long (argc, argv, "si:o:f:t:x:y:z:hv", long_options, &option_index);
-
-    if (c == -1)
+  switch(vertices->t) {
+    case tinyply::Type::FLOAT32:
+      std::cerr << "WARNING: " << (input?input:"ply file") << ": you should set the input coordinates property type to \"double\"" << std::endl;
+      result=doProj((float3*)vertices->buffer.get());
       break;
 
-    switch(c){
-      case 'i':
-        input=optarg;
-        break;
+    case tinyply::Type::FLOAT64:
+      result=doProj((double3*)vertices->buffer.get());
+      break;
 
-      case 'o':
-        output=optarg;
-        break;
-
-      case 'f':
-        fromProj=optarg;
-        sourceProj = pj_init_plus(fromProj);
-        if (sourceProj==NULL) {
-          std::cerr << "invalid parameter: " << fromProj << std::endl;
-          return false;
-        }
-        break;
-
-      case 't':
-        toProj=optarg;
-        targetProj = pj_init_plus(toProj);
-        if (targetProj==NULL) {
-          std::cerr << "invalid parameter: " << toProj << std::endl;
-          return false;
-        }
-        break;
-
-      case 'x':
-        ox=atof(optarg);
-        break;
-
-      case 'y':
-        oy=atof(optarg);
-        break;
-
-      case 'z':
-        oz=atof(optarg);
-        break;
-
-      case 's':
-        shift_output=1;
-        break;
-
-      case 'v':
-        version();
-        exit(0);
-        break;
-
-      default:
-        usage();
-        break;
-    }
+    default:
+      throw std::runtime_error("unhandled vertices numeric type");
+      break;
   }
 
-  /* Print any remaining command line arguments (not options). */
-  if (optind < argc) {
-    std::cerr << "invalid arguments:";
-    while (optind < argc) {
-      std::cerr << " " << argv[optind++];
-    }
-    std::cerr << std::endl;
-    usage();
-  }
+  return result;
+}
 
-  if (!input || !fromProj || !toProj) {
-    usage();
-  }
-
-  return !convert();
+void ProjPly::updateComments(){
+  std::vector<std::string> &comments=file.get_comments();
+  comments.push_back(std::string("projply: ")+fromProj+" +to "+toProj);
 }
 
 
-template <class T>
-double3 *reproj(T points, size_t point_size, size_t pointCount) {
+void ProjPly::save(){
+  /* TODO: use result to convert point type to double in ouput ply when input ply contains floats */
+  if (verbose) std::cerr << "Saving " << output << std::endl;
+  if (output) {
+    std::filebuf fb_ascii;
+    fb_ascii.open(output, std::ios::out);
+    std::ostream outstream_ascii(&fb_ascii);
+    if (outstream_ascii.fail()) throw std::runtime_error(std::string("failed to open ") + output + " for writing");
+    outstream_ascii << std::fixed;
+    file.write(outstream_ascii,false);
+  } else {
+    std::cout << std::fixed;
+    file.write(std::cout,false);
+  }
+  if (verbose) std::cerr << "Done !" << std::endl;
+}
+
+template<class T> double3 *ProjPly::doProj(T points) {
+  size_t pointCount=vertices->count;
 
   double minx=std::numeric_limits<double>::max();
   double miny=std::numeric_limits<double>::max();
   double minz=std::numeric_limits<double>::max();
 
   double3 *result;
-  if (point_size==sizeof(double3)) {
+  if (sizeof(points->x)==sizeof(double3)) {
     result=(double3*)points;
   } else {
     result=(double3*)malloc(pointCount*sizeof(double3));
   }
 
+  double ox=offset.x;
+  double oy=offset.y;
+  double oz=offset.z;
   if (shift_output) {
-
     for (size_t i = 0; i < pointCount; ++i) {
       double *x=&result[i].x;
       double *y=&result[i].y;
@@ -224,9 +177,14 @@ double3 *reproj(T points, size_t point_size, size_t pointCount) {
       minz=std::min(minz,*z);
     }
 
-    ox=static_cast<long int>(minx/100)*100.0;
-    oy=static_cast<long int>(miny/100)*100.0;
-    oz=static_cast<long int>(minz/100)*100.0;
+    if (pointCount) {
+      ox=static_cast<long int>(minx/100)*100.0;
+      oy=static_cast<long int>(miny/100)*100.0;
+      oz=static_cast<long int>(minz/100)*100.0;
+    } else {
+      ox=oy=oz=0;
+    }
+
 
     for (size_t i = 0; i < pointCount; ++i) {
       result[i].x-=ox;
@@ -249,7 +207,7 @@ double3 *reproj(T points, size_t point_size, size_t pointCount) {
     }
   }
 
-  if (point_size==sizeof(float3)) {
+  if (sizeof(points->x)==sizeof(float3)) {
     for (size_t i = 0; i < pointCount; ++i) {
       points[i].x=result[i].x;
       points[i].y=result[i].y;
@@ -259,73 +217,4 @@ double3 *reproj(T points, size_t point_size, size_t pointCount) {
 
   std::cerr << std::setprecision(10) << std::noshowpoint << "origin " << ox << " " << oy << " " << oz << std::endl;
   return result;
-}
-
-int convert() {
-  std::ifstream ss(input, std::ios::binary);
-  if (ss.fail()) throw std::runtime_error(std::string("failed to open ") + input);
-
-  std::cerr << "Opening " << input << " ..." << std::endl;
-  tinyply::PlyFile file;
-  file.parse_header(ss);
-
-  for (auto e : file.get_elements()) {
-    std::cerr << "element - " << e.name << " (" << e.size << ")" << std::endl;
-    for (auto p : e.properties) {
-      std::cerr << "\tproperty - " << p.name << " (" << tinyply::PropertyTable[p.propertyType].str << ")" << std::endl;
-      if (p.name==std::string("x") || p.name==std::string("y") || p.name==std::string("z")) {
-        if (e.name==std::string("vertex")) continue;
-      }
-      (void)file.request_properties_from_element(e.name.c_str(), { p.name.c_str() });
-    }
-
-  }
-
-  std::shared_ptr<tinyply::PlyData> vertices;
-
-  try { vertices = file.request_properties_from_element("vertex", { "x", "y", "z" }); }
-  catch (const std::exception & e) { std::cerr << "error: " << input << ": " << e.what() << std::endl; return false; }
-
-  std::cerr << "Reading ..." << std::endl;
-  file.read(ss);
-
-
-  std::cerr << "Reprojecting ..." << std::endl;
-  double3 *result;
-
-  switch(vertices->t) {
-    case tinyply::Type::FLOAT32:
-     std::cerr << "WARNING: you should set the input coordinates property type to \"double\"" << std::endl;
-      result=reproj((float3*)vertices->buffer.get(),sizeof(float3),vertices->count);
-      break;
-    case tinyply::Type::FLOAT64:
-      result=reproj((double3*)vertices->buffer.get(),sizeof(double3),vertices->count);
-      break;
-    default:
-      throw std::runtime_error("unhandled vertices numeric type");
-      break;
-  }
-
-  /* TODO: use result to convert point type to double in ouput ply when input ply contains floats */
-
-  std::vector<std::string> &comments=file.get_comments();
-  comments.push_back(std::string("projply: ")+fromProj+" +to "+toProj);
-
-  std::cerr << "Saving " << output << std::endl;
-  if (output) {
-    std::filebuf fb_ascii;
-    fb_ascii.open(output, std::ios::out);
-    std::ostream outstream_ascii(&fb_ascii);
-    if (outstream_ascii.fail()) throw std::runtime_error(std::string("failed to open ") + output + " for writing");
-    outstream_ascii << std::fixed;
-    file.write(outstream_ascii,false);
-  } else {
-
-    std::cout << std::fixed;
-    file.write(std::cout,false);
-  }
-  std::cerr << "Done !" << std::endl;
-
-  return true;
-
 }

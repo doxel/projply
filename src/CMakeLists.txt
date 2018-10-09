@@ -45,7 +45,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 #include_directories(${PCL_INCLUDE_DIRS})
 #link_directories({${PCL_DEFINITIONS})
 
-add_executable(projply projply.cpp)
+add_executable(projply main.cpp projply.cpp ply_io.cpp)
 
 # ${PCL_COMMON_LIBRARIES} ${PCL_IO_LIBRARIES} adds too much unused symbols
 #target_link_libraries(projply pcl_common pcl_io boost_system boost_filesystem proj)

@@ -1,6 +1,66 @@
+/*
+* Copyright (c) 2018 ALSENET SA
+*
+* Author(s):
+*
+*      Luc Deschenaux <luc.deschenaux@freesurf.ch>
+*
+* This program is free software: you can redistribute it and/or modify
+* it under the terms of the GNU Affero General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU Affero General Public License for more details.
+*
+* You should have received a copy of the GNU Affero General Public License
+* along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*
+*/
+
+#include <proj_api.h>
+
 #define projply_VERSION_MAJOR @projply_VERSION_MAJOR@
 #define projply_VERSION_MINOR @projply_VERSION_MINOR@
 #define projply_VERSION_PATCH @projply_VERSION_PATCH@
 #define projply_GIT_BRANCH @projply_GIT_BRANCH@
 #define projply_GIT_COMMIT @projply_GIT_COMMIT@
 
+typedef struct { float x, y, z; } float3;
+typedef struct { double x, y, z; } double3;
+
+class ProjPly {
+public:
+  char *input;
+  char *fromProj;
+  char *toProj;
+  double3 offset;
+  int shift_output;
+  char *output;
+  int verbose;
+  projPJ targetProj;
+  projPJ sourceProj;
+  double3 *result;
+  tinyply::PlyFile file;
+  std::shared_ptr<tinyply::PlyData> vertices;
+  std::vector<std::shared_ptr<tinyply::PlyData>> otherProperties;
+
+  ProjPly();
+  ProjPly(
+    const char *input,
+    const char *fromProj,
+    const char *toProj,
+    const double3 &offset,
+    const int shift_output,
+    const char *output,
+    const int verbose
+  );
+  void readFile();
+  void initProj();
+  double3 *proj();
+  template<class T> double3 *doProj(T points);
+  void updateComments();
+  void save();
+};
