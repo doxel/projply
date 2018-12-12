@@ -77,8 +77,8 @@ ProjPly::ProjPly(
   this->output=(char*)output;
   this->verbose=verbose;
 
-  readFile();
   initProj();
+  readFile();
   proj();
   updateComments();
   save();

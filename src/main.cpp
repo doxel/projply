@@ -190,12 +190,6 @@ int main(int argc, char **argv) {
   }
 
   try {
-    projPJ sourceProj=pj_init_plus(fromProj);
-    if (sourceProj==NULL) throw std::runtime_error(std::string("Invalid projection: ")+fromProj);
-
-    projPJ targetProj=pj_init_plus(toProj);
-    if (targetProj==NULL) throw std::runtime_error(std::string("Invalid projection: ")+toProj);
-
     double3 offset;
     offset.x=ox;
     offset.y=oy,
