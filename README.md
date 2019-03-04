@@ -1,21 +1,29 @@
 # projply
 
-Convert georeferenced pointclouds from one geographic coordinate system to another using the proj library
+Convert georeferenced pointclouds from one coordinate reference system
+to another using a PROJ4 pipeline, avoiding using an intermediate coordinate
+reference system whenever possible.
 
 # Dependencies
 
 You need at least:
 
-* libpcl-1.8
-* libeigen3
-* libboost-system
+* git
+* cmake
+* pkg-config
 * libproj
 
 ```
-sudo apt-get install libpcl-dev libeigen3-dev libboost-dev libproj-dev
+sudo apt-get install git cmake pkg-config libproj-dev
 ```
 
-## Build and Install
+And optionally docker (recommended for the ease to use the latest PROJ4)
+
+```
+sudo apt-get install docker-ce
+```
+
+## Build and Install locally
 
 ```
 mkdir build
@@ -24,14 +32,24 @@ cmake ..
 make
 sudo make install
 ```
+
+## Build on top of the osgeo/proj docker container
+The bin/projply script will run the projply executable in the docker image,
+mounting as volume the directories specified for --input and --output plys,
+so the command syntax does not change
+
+```
+make && sudo make install
+```
+
 ## Synopsis
 ```
 Usage: projply <options>
 Options:
   -i|--input <ply_filename>     input file
-  -o|--output <ply_filename>    output file
-  -f|--from "+opt[=arg] ..."    from cartographic parameters
-  -t|--to "+opt[=arg] ..."      to cartographic parameters
+  -o|--output <ply_filename>    output file (optional)
+  -f|--from "opt[=arg] ..."     from coordinate reference system
+  -t|--to "opt[=arg] ..."       to coordinate reference system
   -x <offset>                   optional: shift input coordinates
   -y <offset>                   optional: shift input coordinates
   -z <offset>                   optional: shift input coordinates
@@ -41,13 +59,13 @@ Options:
 ## Example
 
 ```
-projply -i mn95.ply -o geocentric.ply --from '+init=epsg:2056' --to '+init=epsg:4932' --shift
+projply -i mn95.ply -o geocentric.ply --from init=epsg:2056 --to init=epsg:4932 --shift
 ```
 
 ## COPYRIGHT
 
 ```
- Copyright (c) 2018 ALSENET SA
+ Copyright (c) 2018-2019 ALSENET SA
 
  Author(s):
 

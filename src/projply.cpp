@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2018 ALSENET SA
+* Copyright (c) 2018-2019 ALSENET SA
 *
 * Author(s):
 *
@@ -20,34 +20,9 @@
 *
 */
 
-
-
-
-/*
- * Copyright (c) 2018 ALSENET SA
- *
- * Author(s):
- *
- *      Luc Deschenaux <luc.deschenaux@freesurf.ch>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
- */
-
 #include <iostream>
 #include <iomanip>
-#include <proj_api.h>
+#include <proj.h>
 #include <algorithm>
 #include <math.h>
 #include <sstream>
@@ -92,11 +67,8 @@ void ProjPly::readFile(){
 }
 
 void ProjPly::initProj(){
-  sourceProj=pj_init_plus(fromProj);
-  if (sourceProj==NULL) throw std::runtime_error(std::string("Invalid projection: ")+fromProj);
-
-  targetProj=pj_init_plus(toProj);
-  if (sourceProj==NULL) throw std::runtime_error(std::string("Invalid projection: ")+toProj);
+  P = proj_create_crs_to_crs(0, fromProj, toProj, 0);
+  if (!P) throw std::runtime_error(std::string("error: proj_trans_generic returned error code ")+proj_errno_string(proj_errno(0)));
 }
 
 double3 *ProjPly::proj() {
@@ -125,7 +97,6 @@ void ProjPly::updateComments(){
   comments.push_back(std::string("projply: ")+fromProj+" +to "+toProj);
 }
 
-
 void ProjPly::save(){
   /* TODO: use result to convert point type to double in ouput ply when input ply contains floats */
   if (verbose) std::cerr << "Saving " << output << std::endl;
@@ -151,7 +122,7 @@ template<class T> double3 *ProjPly::doProj(T points) {
   double minz=std::numeric_limits<double>::max();
 
   double3 *result;
-  if (sizeof(points->x)==sizeof(double3)) {
+  if (sizeof(points->x)==sizeof(double)) {
     result=(double3*)points;
   } else {
     result=(double3*)malloc(pointCount*sizeof(double3));
@@ -160,23 +131,29 @@ template<class T> double3 *ProjPly::doProj(T points) {
   double ox=offset.x;
   double oy=offset.y;
   double oz=offset.z;
+  for (size_t i = 0; i < pointCount; ++i) {
+    result[i].x=static_cast<double>(points[i].x)+ox;
+    result[i].y=static_cast<double>(points[i].y)+oy;
+    result[i].z=static_cast<double>(points[i].z)+oz;
+  }
+  size_t r = proj_trans_generic(
+    P,
+    PJ_FWD,
+    &result[0].x, sizeof(double3), pointCount,
+    &result[0].y, sizeof(double3), pointCount,
+    &result[0].z, sizeof(double3), pointCount,
+    0, 0, 0
+  );
+  if (!r) {
+    throw std::runtime_error(std::string("error: proj_trans_generic returned error code ")+proj_errno_string(proj_errno(P)));
+  }
+
   if (shift_output) {
     for (size_t i = 0; i < pointCount; ++i) {
-      double *x=&result[i].x;
-      double *y=&result[i].y;
-      double *z=&result[i].z;
-      *x=static_cast<double>(points[i].x)+ox;
-      *y=static_cast<double>(points[i].y)+oy;
-      *z=static_cast<double>(points[i].z)+oz;
-      int p = pj_transform(sourceProj, targetProj, 1, 1, x, y, z );
-      if (p) {
-        throw std::runtime_error(std::string("error: pj_transform returned error code ")+std::to_string(p));
-      }
-      minx=std::min(minx,*x);
-      miny=std::min(miny,*y);
-      minz=std::min(minz,*z);
+      minx=std::min(minx,result[i].x);
+      miny=std::min(miny,result[i].y);
+      minz=std::min(minz,result[i].z);
     }
-
     if (pointCount) {
       ox=static_cast<long int>(minx/100)*100.0;
       oy=static_cast<long int>(miny/100)*100.0;
@@ -184,30 +161,14 @@ template<class T> double3 *ProjPly::doProj(T points) {
     } else {
       ox=oy=oz=0;
     }
-
-
     for (size_t i = 0; i < pointCount; ++i) {
       result[i].x-=ox;
       result[i].y-=oy;
       result[i].z-=oz;
     }
-
-  } else {
-    for (size_t i = 0; i < pointCount; ++i) {
-      double *x=&result[i].x;
-      double *y=&result[i].y;
-      double *z=&result[i].z;
-      *x=static_cast<double>(points[i].x)+ox;
-      *y=static_cast<double>(points[i].y)+oy;
-      *z=static_cast<double>(points[i].z)+oz;
-      int p = pj_transform(sourceProj, targetProj, 1, 1, x, y, z );
-      if (p) {
-        throw std::runtime_error(std::string("error: pj_transform returned error code ")+std::to_string(p));
-      }
-    }
   }
 
-  if (sizeof(points->x)==sizeof(float3)) {
+  if (sizeof(points->x)!=sizeof(double)) {
     for (size_t i = 0; i < pointCount; ++i) {
       points[i].x=result[i].x;
       points[i].y=result[i].y;

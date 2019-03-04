@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2018 ALSENET SA
+* Copyright (c) 2018-2019 ALSENET SA
 *
 * Author(s):
 *
@@ -20,34 +20,9 @@
 *
 */
 
-
-
-
-/*
- * Copyright (c) 2018 ALSENET SA
- *
- * Author(s):
- *
- *      Luc Deschenaux <luc.deschenaux@freesurf.ch>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
- */
-
 #include <iostream>
 #include <iomanip>
-#include <proj_api.h>
+#include <proj.h>
 #include <algorithm>
 #include <math.h>
 #include <sstream>
@@ -64,8 +39,6 @@ int shift_output;
 int verbose=1;
 char *input;
 char *output;
-projPJ sourceProj;
-projPJ targetProj;
 
 char *fromProj;
 char *toProj;
@@ -82,9 +55,9 @@ void usage() {
   std::cerr << "Usage: " << appName << " <options>" << std::endl;
   std::cerr << "Options:" << std::endl;
   std::cerr << "  -i|--input <ply_filename>     input file" << std::endl;
-  std::cerr << "  -o|--output <ply_filename>    output file" << std::endl;
-  std::cerr << "  -f|--from \"+opt[=arg] ...\"    from cartographic parameters" << std::endl;
-  std::cerr << "  -t|--to \"+opt[=arg] ...\"      to cartographic parameters" << std::endl;
+  std::cerr << "  -o|--output <ply_filename>    output file (optional)" << std::endl;
+  std::cerr << "  -f|--from \"opt[=arg] ...\"     from coordinate reference system" << std::endl;
+  std::cerr << "  -t|--to \"opt[=arg] ...\"       to coordinate reference system" << std::endl;
   std::cerr << "  -x <offset>                   optional: shift input coordinates" << std::endl;
   std::cerr << "  -y <offset>                   optional: shift input coordinates" << std::endl;
   std::cerr << "  -z <offset>                   optional: shift input coordinates" << std::endl;
@@ -117,6 +90,7 @@ int main(int argc, char **argv) {
     if (c == -1)
       break;
 
+    PJ *P;
     switch(c){
       case 'i':
         input=optarg;
@@ -128,20 +102,24 @@ int main(int argc, char **argv) {
 
       case 'f':
         fromProj=optarg;
-        sourceProj = pj_init_plus(fromProj);
-        if (sourceProj==NULL) {
+        P=proj_create(0,fromProj);
+        if (!P) {
+          std::cerr << std::string(proj_errno_string(proj_errno(0))) << std::endl;
           std::cerr << "invalid parameter: " << fromProj << std::endl;
           return false;
         }
+        proj_destroy(P);
         break;
 
       case 't':
         toProj=optarg;
-        targetProj = pj_init_plus(toProj);
-        if (targetProj==NULL) {
+        P=proj_create(0,toProj);
+        if (!P) {
+          std::cerr << std::string(proj_errno_string(proj_errno(0))) << std::endl;
           std::cerr << "invalid parameter: " << toProj << std::endl;
           return false;
         }
+        proj_destroy(P);
         break;
 
       case 'x':

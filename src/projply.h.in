@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2018 ALSENET SA
+* Copyright (c) 2018-2019 ALSENET SA
 *
 * Author(s):
 *
@@ -20,7 +20,7 @@
 *
 */
 
-#include <proj_api.h>
+#include <proj.h>
 
 #define projply_VERSION_MAJOR @projply_VERSION_MAJOR@
 #define projply_VERSION_MINOR @projply_VERSION_MINOR@
@@ -40,8 +40,7 @@ public:
   int shift_output;
   char *output;
   int verbose;
-  projPJ targetProj;
-  projPJ sourceProj;
+  PJ *P;
   double3 *result;
   tinyply::PlyFile file;
   std::shared_ptr<tinyply::PlyData> vertices;
