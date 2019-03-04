@@ -34,9 +34,9 @@ sudo make install
 ```
 
 ## Build on top of the osgeo/proj docker container
-The bin/projply script will run the projply executable in the docker image,
+The bin/projply script will run projply in the docker container transparently
 mounting as volume the directories specified for --input and --output plys,
-so the command syntax does not change
+so the command syntax does not change.
 
 ```
 make && sudo make install
